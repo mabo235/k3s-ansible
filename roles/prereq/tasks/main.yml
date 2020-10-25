@@ -1,8 +1,49 @@
 ---
+
+- name: permit traffic in default zone for kube-apiserver service
+  firewalld:
+    service: "{{ item }}"
+    permanent: yes
+    state: enabled
+  with_items:
+    - etcd-server
+    - etcd-client
+    - kube-apiserver
+
 - name: Set SELinux to disabled state
   selinux:
     state: disabled
-  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux']
+  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux', 'Fedora']
+  notify: reboot machine
+
+- name: Change the default firewalld backend
+  lineinfile:
+    path: /etc/firewalld/firewalld.conf
+    line: FirewallBackend=iptables
+    regexp: FirewallBackend=
+  when: ansible_distribution == "Fedora" and ansible_distribution_major_version >= '31'
+  notify: restart firewalld
+
+- name: Install grubby
+  dnf:
+    name: grubby
+    state: present
+  when: ansible_distribution == "Fedora" and ansible_distribution_major_version >= '31'
+
+- name: Check if systemd.unified_cgroup_hierarchy=0 is set in kernelopts
+  command: grep -Eq '^kernelopts=.* systemd\.unified_cgroup_hierarchy=0' /boot/grub2/grubenv
+  register: grubenv_has_cgroup_exception
+  check_mode: no
+  ignore_errors: yes
+  changed_when: no
+  when: ansible_distribution == "Fedora" and ansible_distribution_major_version >= '31'
+
+- name: Configure systemd.unified_cgroup_hierarchy=0 in kernelopts
+  command: grubby --update-kernel=ALL --args="systemd.unified_cgroup_hierarchy=0"
+  when:
+    - ansible_distribution == "Fedora" and ansible_distribution_major_version >= '31'
+    - grubenv_has_cgroup_exception.rc != 0
+  notify: reboot machine
 
 - name: Enable IPv4 forwarding
   sysctl:
@@ -23,13 +64,13 @@
     content: "br_netfilter"
     dest: /etc/modules-load.d/br_netfilter.conf
     mode: "u=rw,g=,o="
-  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux']
+  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux', 'Fedora']
 
 - name: Load br_netfilter
   modprobe:
     name: br_netfilter
     state: present
-  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux']
+  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux', 'Fedora']
 
 - name: Set bridge-nf-call-iptables (just to be sure)
   sysctl:
@@ -37,7 +78,7 @@
     value: "1"
     state: present
     reload: yes
-  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux']
+  when: ansible_distribution in ['CentOS', 'Red Hat Enterprise Linux', 'Fedora']
   loop:
     - net.bridge.bridge-nf-call-iptables
     - net.bridge.bridge-nf-call-ip6tables
