@@ -1,7 +1,8 @@
 ---
-k3s_version: v1.17.5+k3s1
-ansible_user: debian
+k3s_version: v1.19.3+k3s3
+ansible_user: pi
+ansible_password: Pik3s2020!
 systemd_dir: /etc/systemd/system
 master_ip: "{{ hostvars[groups['master'][0]]['ansible_host'] | default(groups['master'][0]) }}"
-extra_server_args: ""
+extra_server_args: "--disable servicelb"
 extra_agent_args: ""
