@@ -7,6 +7,3 @@ master_ip: "{{ hostvars[groups['master'][0]]['ansible_host'] | default(groups['m
 extra_server_args: "--disable servicelb"
 extra_agent_args: ""
 
-
-#test1
-#masterchange1
